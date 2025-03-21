@@ -1,35 +1,46 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import SearchBar from './components/SearchBar';
+import CryptoList from './components/CryptoList';
+import CandlestickChart from './components/CandlestickChart';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [selectedCryptos, setSelectedCryptos] = useState([]);
+  const [selectedCrypto, setSelectedCrypto] = useState({ id: '', name: '' });
+
+  const addCrypto = (crypto) => {
+    if (selectedCryptos.length >= 6) {
+      alert('Watchlist is limited to 6 cryptocurrencies.');
+      return;
+    }
+    if (!selectedCryptos.some((c) => c.id === crypto.id)) {
+      setSelectedCryptos([...selectedCryptos, crypto]);
+      if (!selectedCrypto.id) {
+        setSelectedCrypto(crypto);
+      }
+    }
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div className="flex flex-col h-screen">
+      <header className="bg-base-200 p-4">
+        <h1 className="text-2xl font-bold">Crypto Tracker</h1>
+      </header>
+      <main className="flex flex-1">
+        <div className="flex flex-col w-full">
+          <SearchBar onAddCrypto={addCrypto} />
+          <div className="flex flex-1">
+            <CryptoList
+              selectedCryptos={selectedCryptos}
+              setSelectedCryptos={setSelectedCryptos}
+              selectedCrypto={selectedCrypto}
+              setSelectedCrypto={setSelectedCrypto}
+            />
+            <CandlestickChart crypto={selectedCrypto} />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
 
-export default App
+export default App;
