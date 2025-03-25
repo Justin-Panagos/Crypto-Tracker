@@ -3,16 +3,12 @@ FROM node:18.20 AS frontend-build
 
 WORKDIR /app
 
-# Copy package.json and package-lock.json for caching
 COPY package*.json ./
+COPY vite.config.js ./
 
-# Copy the contents of frontend/ directly into /app/
-COPY frontend/* ./
+COPY frontend/ ./frontend/
 
-# Install dependencies
 RUN npm install
-
-# Build the React app directly (bypassing the build script's cd frontend)
 RUN ./node_modules/.bin/vite build
 
 # Stage 2: Build the FastAPI backend and serve the frontend
@@ -22,15 +18,13 @@ WORKDIR /app
 
 # Copy pyproject.toml and uv.lock
 COPY pyproject.toml uv.lock ./
-
-# Copy the contents of backend/ directly into /app/
 COPY backend/* ./
 
 # Install dependencies
 RUN pip install uv && uv sync
 
 # Copy the built frontend to /app/dist/
-COPY --from=frontend-build /app/dist ./dist
+COPY --from=frontend-build /app/frontend/dist ./dist
 
 # Expose the port
 EXPOSE 8002
