@@ -1,66 +1,59 @@
 import { useEffect, useRef } from 'react';
 import { createChart } from 'lightweight-charts';
-import axios from 'axios';
 
-export default function CandlestickChart({ crypto }) {
+function CandlestickChart({ crypto }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
 
     useEffect(() => {
-        if (!crypto) return;
+        if (!crypto.id) return;
 
-        const fetchData = async () => {
-            const response = await axios.get(`/api/crypto/${crypto.id}/candlestick`);
-            const candlestickData = response.data;
+        const chart = createChart(chartContainerRef.current, {
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight,
+            layout: {
+                backgroundColor: '#ffffff',
+                textColor: '#333',
+            },
+            grid: {
+                vertLines: { color: '#f0f0f0' },
+                horzLines: { color: '#f0f0f0' },
+            },
+        });
 
-            if (chartContainerRef.current) {
-                if (chartRef.current) {
-                    chartRef.current.remove();
-                }
+        const candlestickSeries = chart.addCandlestickSeries();
+        chartRef.current = chart;
 
-                const chart = createChart(chartContainerRef.current, {
-                    width: chartContainerRef.current.clientWidth,
-                    height: 400,
-                    timeScale: { timeVisible: true, secondsVisible: false },
-                });
+        fetch(`/api/crypto/${crypto.id}/candlestick`)
+            .then((res) => res.json())
+            .then((data) => {
+                candlestickSeries.setData(data);
+            })
+            .catch((err) => console.error('Error fetching chart data:', err));
 
-                const candlestickSeries = chart.addCandlestickSeries();
-                candlestickSeries.setData(candlestickData);
-
-                const volumeSeries = chart.addHistogramSeries({
-                    color: '#26a69a',
-                    priceFormat: { type: 'volume' },
-                    priceScale: { scaleMargins: { top: 0.8, bottom: 0 } },
-                });
-                volumeSeries.setData(candlestickData.map((d) => ({
-                    time: d.time,
-                    value: d.volume,
-                    color: d.open < d.close ? '#26a69a' : '#ef5350',
-                })));
-
-                chartRef.current = chart;
-
-                const handleResize = () => {
-                    chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-                };
-                window.addEventListener('resize', handleResize);
-                return () => window.removeEventListener('resize', handleResize);
-            }
+        const handleResize = () => {
+            chart.applyOptions({
+                width: chartContainerRef.current.clientWidth,
+                height: chartContainerRef.current.clientHeight,
+            });
         };
+        window.addEventListener('resize', handleResize);
 
-        fetchData();
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            chart.remove();
+        };
     }, [crypto]);
 
     return (
-        <div className="w-3/4 p-4">
-            {crypto ? (
-                <>
-                    <h2 className="text-lg font-bold mb-4">{crypto.name} Daily Chart</h2>
-                    <div ref={chartContainerRef} />
-                </>
+        <div className="h-[calc(100vh-18rem)]">
+            {crypto.id ? (
+                <div ref={chartContainerRef} className="w-full h-full" />
             ) : (
-                <p className="text-gray-400">Select a cryptocurrency to view its chart.</p>
+                <p className="text-gray-500">Select a cryptocurrency to view its chart.</p>
             )}
         </div>
     );
 }
+
+export default CandlestickChart;

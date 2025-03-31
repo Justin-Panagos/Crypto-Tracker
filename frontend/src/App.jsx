@@ -1,44 +1,71 @@
-import { useState } from 'react';
-import SearchBar from './components/SearchBar';
-import CryptoList from './components/CryptoList';
-import CandlestickChart from './components/CandlestickChart';
+import { useState, useEffect } from 'react';
+import SearchBar from './components/SearchBar.jsx';
+import CryptoList from './components/CryptoList.jsx';
+import CandlestickChart from './components/CandlestickChart.jsx';
+
+import "./index.css";
 
 function App() {
   const [selectedCryptos, setSelectedCryptos] = useState([]);
   const [selectedCrypto, setSelectedCrypto] = useState({ id: '', name: '' });
+  const [theme, setTheme] = useState('light');
+
+  useEffect(() => {
+    if (selectedCryptos.length > 0 && !selectedCrypto.id) {
+      setSelectedCrypto(selectedCryptos[0]);
+    } else if (selectedCryptos.length === 0) {
+      setSelectedCrypto({ id: '', name: '' });
+    }
+  }, [selectedCryptos, selectedCrypto.id]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   const addCrypto = (crypto) => {
-    if (selectedCryptos.length >= 6) {
-      alert('Watchlist is limited to 6 cryptocurrencies.');
-      return;
-    }
-    if (!selectedCryptos.some((c) => c.id === crypto.id)) {
+    if (!selectedCryptos.find((c) => c.id === crypto.id)) {
+      console.log('Adding crypto:', crypto);
       setSelectedCryptos([...selectedCryptos, crypto]);
-      if (!selectedCrypto.id) {
-        setSelectedCrypto(crypto);
-      }
     }
   };
 
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
   return (
-    <div className="flex flex-col h-screen">
-      <header className="bg-base-200 p-4">
-        <h1 className="text-2xl font-bold">Crypto Tracker</h1>
-      </header>
-      <main className="flex flex-1">
-        <div className="flex flex-col w-full">
+    <div className="min-h-screen bg-base-200 text-base-content flex items-center justify-center p-4">
+      <div className="card bg-base-100 shadow-xl w-full max-w-6xl p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl font-bold">Crypto Tracker</h1>
+          <button onClick={toggleTheme} className="btn btn-sm">
+            Toggle Theme ({theme === 'light' ? 'Dark' : 'Light'})
+          </button>
+        </div>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold mb-2">Search Cryptocurrencies</h3>
           <SearchBar onAddCrypto={addCrypto} />
-          <div className="flex flex-1">
+        </div>
+        <div className="flex gap-4">
+          <div className="w-1/3">
+            <h3 className="text-lg font-semibold mb-2">Watchlist</h3>
             <CryptoList
               selectedCryptos={selectedCryptos}
               setSelectedCryptos={setSelectedCryptos}
               selectedCrypto={selectedCrypto}
               setSelectedCrypto={setSelectedCrypto}
             />
+          </div>
+          <div className="w-2/3">
+            <h3 className="text-lg font-semibold mb-2">
+              {selectedCrypto.name
+                ? `${selectedCrypto.name} Chart`
+                : 'Select a Crypto to View Chart'}
+            </h3>
             <CandlestickChart crypto={selectedCrypto} />
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

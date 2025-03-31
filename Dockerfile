@@ -4,6 +4,8 @@ FROM node:18.20 AS frontend-build
 WORKDIR /app
 
 COPY package*.json ./
+COPY tailwind.config.js ./   
+COPY postcss.config.js ./         
 COPY vite.config.js ./
 
 COPY frontend/ ./frontend/
