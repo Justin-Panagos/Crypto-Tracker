@@ -21,7 +21,6 @@ WORKDIR /app
 # Copy pyproject.toml and uv.lock
 COPY pyproject.toml uv.lock ./
 COPY backend/* ./
-
 # Install dependencies
 RUN pip install uv && uv sync
 

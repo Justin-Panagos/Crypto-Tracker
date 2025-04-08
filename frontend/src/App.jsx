@@ -44,7 +44,7 @@ function App() {
         </div>
         <div className="mb-4">
           <h3 className="text-lg font-semibold mb-2">Search Cryptocurrencies</h3>
-          <SearchBar onAddCrypto={addCrypto} />
+          <SearchBar />
         </div>
         <div className="flex gap-4">
           <div className="w-1/3">

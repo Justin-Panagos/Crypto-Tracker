@@ -9,4 +9,6 @@ dependencies = [
     "pycoingecko==3.1.0",
     "python-dotenv==1.0.1",
     "uvicorn==0.30.6",
+    "python-dotenv==1.0.1",
+    "requests>=2.32.3",
 ]

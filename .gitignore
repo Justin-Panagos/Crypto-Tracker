@@ -24,6 +24,9 @@ wheels/
 .venv
 .vscode
 
+# environment variables 
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
