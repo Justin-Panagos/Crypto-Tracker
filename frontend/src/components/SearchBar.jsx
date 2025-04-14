@@ -8,25 +8,46 @@ const SearchBar = () => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    // Fetch all coins on mount
     useEffect(() => {
         axios.get('http://localhost:8002/api/coins')
-            .then(response => setCoins(response.data))
-            .catch(error => console.error('Error fetching coins:', error));
+            .then(response => {
+                console.log('Coins response:', response.data);
+                const mappedCoins = (response.data.data || []).map(coin => ({
+                    id: coin.id || 'unknown',
+                    name: coin.name || 'Unknown',
+                    symbol: coin.symbol || 'N/A',
+                    price: coin.price || 0.0
+                }));
+                setCoins(mappedCoins);
+            })
+            .catch(error => {
+                console.error('Error fetching coins:', error);
+                setCoins([]);
+            });
     }, []);
 
-    // Filter coins when typing
     useEffect(() => {
         if (query) {
-            axios.get(`http://localhost:8002/api/search/${query}`)
-                .then(response => setFilteredCoins(response.data))
-                .catch(error => console.error('Error searching coins:', error));
+            axios.get(`http://localhost:8002/api/search/${encodeURIComponent(query)}`)
+                .then(response => {
+                    console.log('Search response:', response.data);
+                    const mappedCoins = (response.data.data || []).map(coin => ({
+                        id: coin.id || 'unknown',
+                        name: coin.name || 'Unknown',
+                        symbol: coin.symbol || 'N/A',
+                        price: coin.price || 0.0
+                    }));
+                    setFilteredCoins(mappedCoins);
+                })
+                .catch(error => {
+                    console.error('Error searching coins:', error);
+                    setFilteredCoins([]);
+                });
         } else {
             setFilteredCoins([]);
         }
     }, [query]);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -38,6 +59,7 @@ const SearchBar = () => {
     }, []);
 
     const handleAddToWatchlist = (coin) => {
+        console.log('Adding to watchlist:', coin);
         axios.post('http://localhost:8002/api/watchlist', {
             id: coin.id,
             name: coin.name,
@@ -59,12 +81,21 @@ const SearchBar = () => {
             />
             {isDropdownOpen && (
                 <div className="dropdown">
-                    {(query ? filteredCoins : coins.slice(0, 10)).map(coin => (
-                        <div key={coin.id} className="dropdown-item">
-                            <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
-                            <button onClick={() => handleAddToWatchlist(coin)}>Add</button>
-                        </div>
-                    ))}
+                    {(query ? filteredCoins : coins.slice(0, 10)).map((coin, index) => {
+                        const isExactMatch = query.toLowerCase() === coin.name.toLowerCase() || query.toLowerCase() === coin.symbol.toLowerCase();
+                        console.log(`Coin: ${coin.name}, isExactMatch: ${isExactMatch}, Price: ${coin.price}`);
+                        return (
+                            <div
+                                key={coin.id}
+                                className={`dropdown-item ${isExactMatch ? 'exact-match' : ''}`}
+                            >
+                                <span>
+                                    {coin.symbol ? coin.symbol.toUpperCase() : 'N/A'}  - {coin.name}
+                                </span>
+                                <button onClick={() => handleAddToWatchlist(coin)}>Add</button>
+                            </div>
+                        );
+                    })}
                     {query && filteredCoins.length === 0 && (
                         <div className="dropdown-item">No results found</div>
                     )}
