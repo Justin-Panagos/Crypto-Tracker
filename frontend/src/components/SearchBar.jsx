@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import './SearchBar.css';
 
-const SearchBar = () => {
+const SearchBar = ({ setSelectedCryptos }) => {
     const [query, setQuery] = useState('');
     const [coins, setCoins] = useState([]);
     const [filteredCoins, setFilteredCoins] = useState([]);
@@ -27,8 +28,8 @@ const SearchBar = () => {
     }, []);
 
     useEffect(() => {
-        if (query) {
-            axios.get(`http://localhost:8002/api/search/${encodeURIComponent(query)}`)
+        if (query.trim()) {
+            axios.get(`http://localhost:8002/api/search/${encodeURIComponent(query.trim())}`)
                 .then(response => {
                     console.log('Search response:', response.data);
                     const mappedCoins = (response.data.data || []).map(coin => ({
@@ -65,7 +66,10 @@ const SearchBar = () => {
             name: coin.name,
             symbol: coin.symbol
         })
-            .then(response => console.log('Added to watchlist:', response.data))
+            .then(response => {
+                console.log('Added to watchlist:', response.data);
+                setSelectedCryptos(response.data);
+            })
             .catch(error => console.error('Error adding to watchlist:', error));
     };
 
@@ -81,8 +85,8 @@ const SearchBar = () => {
             />
             {isDropdownOpen && (
                 <div className="dropdown">
-                    {(query ? filteredCoins : coins.slice(0, 10)).map((coin, index) => {
-                        const isExactMatch = query.toLowerCase() === coin.name.toLowerCase() || query.toLowerCase() === coin.symbol.toLowerCase();
+                    {(query.trim() ? filteredCoins : coins.slice(0, 10)).map((coin, index) => {
+                        const isExactMatch = query.toLowerCase().trim() === coin.name.toLowerCase().trim() || query.toLowerCase().trim() === coin.symbol.toLowerCase().trim();
                         console.log(`Coin: ${coin.name}, isExactMatch: ${isExactMatch}, Price: ${coin.price}`);
                         return (
                             <div
@@ -90,13 +94,14 @@ const SearchBar = () => {
                                 className={`dropdown-item ${isExactMatch ? 'exact-match' : ''}`}
                             >
                                 <span>
-                                    {coin.symbol ? coin.symbol.toUpperCase() : 'N/A'}  - {coin.name}
+                                    {coin.name} ({coin.symbol ? coin.symbol.toUpperCase() : 'N/A'})
+                                    {coin.price > 0.0 ? ` - $${coin.price.toFixed(2)}` : ''}
                                 </span>
                                 <button onClick={() => handleAddToWatchlist(coin)}>Add</button>
                             </div>
                         );
                     })}
-                    {query && filteredCoins.length === 0 && (
+                    {query.trim() && filteredCoins.length === 0 && (
                         <div className="dropdown-item">No results found</div>
                     )}
                 </div>
