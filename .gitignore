@@ -23,6 +23,7 @@ wheels/
 # Virtual environments
 .venv
 .vscode
+.env
 
 # Editor directories and files
 .vscode/*
