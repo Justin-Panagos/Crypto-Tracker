@@ -66,7 +66,7 @@ function CryptoList({
                     ))}
                 </ul>
             ) : (
-                <p className="text-gray-500">Add a cryptocurrency to your watchlist.</p>
+                <p className="text-gray-500">Select Currencies</p>
             )}
         </div>
     );

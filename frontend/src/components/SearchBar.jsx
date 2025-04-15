@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import './SearchBar.css';
 
 const SearchBar = ({ setSelectedCryptos }) => {
     const [query, setQuery] = useState('');
@@ -12,17 +11,14 @@ const SearchBar = ({ setSelectedCryptos }) => {
     useEffect(() => {
         axios.get('http://localhost:8002/api/coins')
             .then(response => {
-                console.log('Coins response:', response.data);
                 const mappedCoins = (response.data.data || []).map(coin => ({
-                    id: coin.id || 'unknown',
+                    id: String(coin.id || 'unknown'),
                     name: coin.name || 'Unknown',
-                    symbol: coin.symbol || 'N/A',
-                    price: coin.price || 0.0
+                    symbol: coin.symbol || 'N/A'
                 }));
                 setCoins(mappedCoins);
             })
             .catch(error => {
-                console.error('Error fetching coins:', error);
                 setCoins([]);
             });
     }, []);
@@ -31,17 +27,14 @@ const SearchBar = ({ setSelectedCryptos }) => {
         if (query.trim()) {
             axios.get(`http://localhost:8002/api/search/${encodeURIComponent(query.trim())}`)
                 .then(response => {
-                    console.log('Search response:', response.data);
                     const mappedCoins = (response.data.data || []).map(coin => ({
-                        id: coin.id || 'unknown',
+                        id: String(coin.id || 'unknown'),
                         name: coin.name || 'Unknown',
-                        symbol: coin.symbol || 'N/A',
-                        price: coin.price || 0.0
+                        symbol: coin.symbol || 'N/A'
                     }));
                     setFilteredCoins(mappedCoins);
                 })
                 .catch(error => {
-                    console.error('Error searching coins:', error);
                     setFilteredCoins([]);
                 });
         } else {
@@ -60,17 +53,17 @@ const SearchBar = ({ setSelectedCryptos }) => {
     }, []);
 
     const handleAddToWatchlist = (coin) => {
-        console.log('Adding to watchlist:', coin);
-        axios.post('http://localhost:8002/api/watchlist', {
-            id: coin.id,
-            name: coin.name,
-            symbol: coin.symbol
-        })
+        const payload = {
+            id: String(coin.id || 'unknown'),
+            name: coin.name || 'Unknown',
+            symbol: coin.symbol || 'N/A'
+        };
+        axios.post('http://localhost:8002/api/watchlist', payload)
             .then(response => {
-                console.log('Added to watchlist:', response.data);
                 setSelectedCryptos(response.data);
+                setIsDropdownOpen(false);
             })
-            .catch(error => console.error('Error adding to watchlist:', error));
+            .catch(error => { });
     };
 
     return (
@@ -86,8 +79,9 @@ const SearchBar = ({ setSelectedCryptos }) => {
             {isDropdownOpen && (
                 <div className="dropdown">
                     {(query.trim() ? filteredCoins : coins.slice(0, 10)).map((coin, index) => {
-                        const isExactMatch = query.toLowerCase().trim() === coin.name.toLowerCase().trim() || query.toLowerCase().trim() === coin.symbol.toLowerCase().trim();
-                        console.log(`Coin: ${coin.name}, isExactMatch: ${isExactMatch}, Price: ${coin.price}`);
+                        const isExactMatch = query.toLowerCase().trim().split(/\s+/).some(word =>
+                            word === coin.name.toLowerCase().trim() || word === coin.symbol.toLowerCase().trim()
+                        );
                         return (
                             <div
                                 key={coin.id}
@@ -95,7 +89,6 @@ const SearchBar = ({ setSelectedCryptos }) => {
                             >
                                 <span>
                                     {coin.name} ({coin.symbol ? coin.symbol.toUpperCase() : 'N/A'})
-                                    {coin.price > 0.0 ? ` - $${coin.price.toFixed(2)}` : ''}
                                 </span>
                                 <button onClick={() => handleAddToWatchlist(coin)}>Add</button>
                             </div>
