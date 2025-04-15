@@ -22,13 +22,6 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const addCrypto = (crypto) => {
-    if (!selectedCryptos.find((c) => c.id === crypto.id)) {
-      console.log('Adding crypto:', crypto);
-      setSelectedCryptos([...selectedCryptos, crypto]);
-    }
-  };
-
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
