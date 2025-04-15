@@ -1,120 +1,162 @@
-# backend/main.py
-import logging
-import math
-import os
-from datetime import datetime
-
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from pycoingecko import CoinGeckoAPI
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from pydantic import BaseModel
+import json
+import os
+import requests
 
 app = FastAPI()
+api_key = os.getenv("TM_API_KEY")
+class Coin(BaseModel):
+    id: str
+    name: str
+    symbol: str
 
-# Log the static directory contents at startup
-static_dir = "dist"  # Changed from "frontend/dist" to "dist"
-logger.info(f"Static directory: {static_dir}")
-logger.info(f"Static directory exists: {os.path.exists(static_dir)}")
-if os.path.exists(static_dir):
-    logger.info(f"Contents of static directory: {os.listdir(static_dir)}")
-    index_path = os.path.join(static_dir, "index.html")
-    logger.info(f"Index file exists: {os.path.exists(index_path)}")
-    # Serve the React frontend statically at the root
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-else:
-    logger.error(
-        f"Static directory {static_dir} does not exist - skipping static file serving"
-    )
+def load_watchlist():
+    try:
+        with open("watchlist.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
 
-cg = CoinGeckoAPI()
+def save_watchlist(watchlist):
+    with open("watchlist.json", "w") as f:
+        json.dump(watchlist, f)
 
-
-# Helper function to calculate Fibonacci-based periods
-def get_fibonacci_periods(max_periods=5):
-    fib = [1, 1]
-    while len(fib) < max_periods:
-        fib.append(fib[-1] + fib[-2])
-    return fib[2:]  # Start from 2, 3, 5, 8, 13
-
-
-# Search for cryptocurrencies
-@app.get("/api/search/{query}")
-async def search_crypto(query: str):
-    coins = cg.get_coins_list()
-    filtered = [
-        coin
-        for coin in coins
-        if query.lower() in coin["name"].lower()
-        or query.lower() in coin["symbol"].lower()
-    ]
-    return filtered[:10]  # Return top 10 matches
-
-
-# Get current price and moving averages
-@app.get("/api/crypto/{coin_id}")
-async def get_crypto_data(coin_id: str):
-    # Get current price
-    price_data = cg.get_price(ids=coin_id, vs_currencies="usd")
-    current_price = price_data.get(coin_id, {}).get("usd", 0)
-
-    # Get 3-minute OHLC data for the last 24 hours
-    ohlc_data = cg.get_coin_ohlc_by_id(
-        id=coin_id, vs_currency="usd", days=1, interval="3m"
-    )
-
-    # Calculate 3-minute simple moving average (SMA)
-    prices = [candle[4] for candle in ohlc_data]  # Closing prices
-    sma_3min = (
-        sum(prices[-20:]) / min(20, len(prices)) if prices else 0
-    )  # Last 20 periods (~1 hour)
-
-    # Calculate Fibonacci-based moving averages (e.g., 5, 8, 13 minutes)
-    fib_periods = get_fibonacci_periods()  # [2, 3, 5, 8, 13]
-    fib_averages = {}
-    for period in fib_periods:
-        num_candles = period  # Each candle is 3 minutes
-        if len(prices) >= num_candles:
-            fib_averages[f"sma_{period*3}min"] = (
-                sum(prices[-num_candles:]) / num_candles
-            )
-        else:
-            fib_averages[f"sma_{period*3}min"] = 0
-
-    return {
-        "current_price": current_price,
-        "sma_3min": sma_3min,
-        "fib_averages": fib_averages,
+def fetch_prices():
+    url = "https://api.tokenmetrics.com/v2/price"
+    headers = {
+        "accept": "application/json",
+        "api_key": api_key
     }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json().get("data", [])
+        print("Market data:", data[:2])
+        return {str(item.get("TOKEN_ID")): item.get("USD_PRICE", 0.0) for item in data}
+    print("Market data failed:", response.status_code)
+    return {}
 
+@app.get("/test")
+async def test():
+    return {"message": "Backend is alive"}
 
-# Get daily candlestick data for chart
-@app.get("/api/crypto/{coin_id}/candlestick")
-async def get_candlestick_data(coin_id: str):
-    # Get OHLC data for the last day with 1-hour intervals
-    ohlc_data = cg.get_coin_ohlc_by_id(
-        id=coin_id, vs_currency="usd", days=1, interval="1h"
-    )
+@app.get("/api/coins")
+async def get_all_coins():
+    url = "https://api.tokenmetrics.com/v2/tokens?limit=1000"
+    headers = {
+        "accept": "application/json",
+        "api_key": api_key
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        tokens = data.get("data", [])
+        print("Coins full token:", tokens[0] if tokens else "Empty")
+        prices = fetch_prices()
+        mapped_data = [
+            {
+                "id": t.get("TOKEN_ID", "unknown"),
+                "name": t.get("TOKEN_NAME", "Unknown"),
+                "symbol": t.get("TOKEN_SYMBOL", "N/A"),
+                "price": prices.get(str(t.get("TOKEN_ID", "unknown")), 0.0)
+            }
+            for t in tokens
+        ]
+        return {"data": mapped_data}
+    return {"error": "Failed to fetch coins", "status": response.status_code}
 
-    # Format for candlestick chart
-    candlesticks = [
-        {
-            "time": int(datetime.fromtimestamp(candle[0] / 1000).timestamp()),
-            "open": candle[1],
-            "high": candle[2],
-            "low": candle[3],
-            "close": candle[4],
-            "volume": candle[4]
-            * 1000,  # Mock volume (CoinGecko OHLC doesn't include volume)
+@app.get("/api/search/{query}")
+async def search_coins(query: str):
+    url = "https://api.tokenmetrics.com/v2/tokens?limit=1000"
+    headers = {
+        "accept": "application/json",
+        "api_key": api_key
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        return {"error": "Search failed", "status": response.status_code}
+    
+    tokens = response.json().get("data", [])
+    print("Tokens received:", tokens[:2])
+    prices = fetch_prices()
+    
+    exact_matches = []
+    partial_matches = []
+    
+    query_lower = query.lower().strip()
+    for t in tokens:
+        token_name = t.get("TOKEN_NAME", "").lower().strip()
+        token_symbol = t.get("TOKEN_SYMBOL", "").lower().strip()
+        mapped_token = {
+            "id": t.get("TOKEN_ID", "unknown"),
+            "name": t.get("TOKEN_NAME", "Unknown"),
+            "symbol": t.get("TOKEN_SYMBOL", "N/A"),
+            "price": prices.get(str(t.get("TOKEN_ID", "unknown")), 0.0)
         }
-        for candle in ohlc_data
-    ]
-    return candlesticks
+        
+        if query_lower == token_name or query_lower == token_symbol:
+            exact_matches.append(mapped_token)
+        elif query_lower in token_name or query_lower in token_symbol:
+            partial_matches.append(mapped_token)
+    
+    print("Exact matches:", exact_matches)
+    print("Partial matches:", partial_matches)
+    
+    filtered = exact_matches + partial_matches
+    print("Filtered coins:", filtered[:10])
+    return {"data": filtered[:10]}
 
+@app.get("/api/watchlist")
+async def get_watchlist():
+    watchlist = load_watchlist()
+    print("Watchlist fetched:", watchlist)
+    return watchlist
 
-if __name__ == "__main__":
-    import uvicorn
+@app.post("/api/watchlist")
+async def add_to_watchlist(coin: Coin):
+    watchlist = load_watchlist()
+    if not any(c["id"] == coin.id for c in watchlist):
+        watchlist.append(coin.dict())
+        save_watchlist(watchlist)
+        print("Watchlist updated:", watchlist)
+        return watchlist
+    print("Coin already in watchlist:", coin)
+    return watchlist
 
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+@app.delete("/api/watchlist/{coin_id}")
+async def delete_from_watchlist(coin_id: str):
+    watchlist = load_watchlist()
+    updated_watchlist = [c for c in watchlist if c["id"] != coin_id]
+    if len(updated_watchlist) == len(watchlist):
+        print("Coin not found in watchlist:", coin_id)
+        raise HTTPException(status_code=404, detail="Coin not found in watchlist")
+    save_watchlist(updated_watchlist)
+    print("Watchlist updated after delete:", updated_watchlist)
+    return updated_watchlist
+
+@app.get("/api/trending")
+async def get_trending():
+    url = "https://api.tokenmetrics.com/v2/tokens?limit=10"
+    headers = {
+        "accept": "application/json",
+        "api_key": api_key
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        tokens = data.get("data", [])
+        prices = fetch_prices()
+        mapped_data = [
+            {
+                "id": t.get("TOKEN_ID", "unknown"),
+                "name": t.get("TOKEN_NAME", "Unknown"),
+                "symbol": t.get("TOKEN_SYMBOL", "N/A"),
+                "price": prices.get(str(t.get("TOKEN_ID", "unknown")), 0.0)
+            }
+            for t in tokens
+        ]
+        return {"data": mapped_data}
+    return {"error": "Failed to fetch trending", "status": response.status_code}
+
+app.mount("/", StaticFiles(directory="dist", html=True), name="static")

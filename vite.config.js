@@ -7,4 +7,10 @@ export default defineConfig({
   build: {
     outDir: 'dist', // Output directory (relative to root)
   },
+  // Disable caching for dev server (not build, but useful if testing locally)
+  server: {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+    }
+  }
 })

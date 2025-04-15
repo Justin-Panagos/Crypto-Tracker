@@ -1,60 +1,113 @@
-import { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import './SearchBar.css';
 
-function SearchBar({ onAddCrypto }) {
+const SearchBar = ({ setSelectedCryptos }) => {
     const [query, setQuery] = useState('');
-    const [results, setResults] = useState([]);
+    const [coins, setCoins] = useState([]);
+    const [filteredCoins, setFilteredCoins] = useState([]);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
-        if (query.trim() === '') return;
-        try {
-            const response = await axios.get(`/api/search/${query}`);
-            setResults(response.data);
-        } catch (error) {
-            console.error('Error fetching search results:', error);
-            setResults([]);
+    useEffect(() => {
+        axios.get('http://localhost:8002/api/coins')
+            .then(response => {
+                console.log('Coins response:', response.data);
+                const mappedCoins = (response.data.data || []).map(coin => ({
+                    id: coin.id || 'unknown',
+                    name: coin.name || 'Unknown',
+                    symbol: coin.symbol || 'N/A',
+                    price: coin.price || 0.0
+                }));
+                setCoins(mappedCoins);
+            })
+            .catch(error => {
+                console.error('Error fetching coins:', error);
+                setCoins([]);
+            });
+    }, []);
+
+    useEffect(() => {
+        if (query.trim()) {
+            axios.get(`http://localhost:8002/api/search/${encodeURIComponent(query.trim())}`)
+                .then(response => {
+                    console.log('Search response:', response.data);
+                    const mappedCoins = (response.data.data || []).map(coin => ({
+                        id: coin.id || 'unknown',
+                        name: coin.name || 'Unknown',
+                        symbol: coin.symbol || 'N/A',
+                        price: coin.price || 0.0
+                    }));
+                    setFilteredCoins(mappedCoins);
+                })
+                .catch(error => {
+                    console.error('Error searching coins:', error);
+                    setFilteredCoins([]);
+                });
+        } else {
+            setFilteredCoins([]);
         }
+    }, [query]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleAddToWatchlist = (coin) => {
+        console.log('Adding to watchlist:', coin);
+        axios.post('http://localhost:8002/api/watchlist', {
+            id: coin.id,
+            name: coin.name,
+            symbol: coin.symbol
+        })
+            .then(response => {
+                console.log('Added to watchlist:', response.data);
+                setSelectedCryptos(response.data);
+            })
+            .catch(error => console.error('Error adding to watchlist:', error));
     };
 
     return (
-        <div>
-            <form onSubmit={handleSearch} className="flex gap-2 mb-4">
-                <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search for a cryptocurrency..."
-                    className="input input-bordered flex-1"
-                />
-                <button type="submit" className="btn btn-primary">
-                    Search
-                </button>
-            </form>
-            {results.length > 0 && (
-                <ul className="menu bg-base-200 rounded-box max-h-64 overflow-y-auto">
-                    {results.map((coin) => (
-                        <li key={coin.id}>
-                            <div className="flex justify-between items-center">
+        <div className="search-bar-container" ref={dropdownRef}>
+            <input
+                type="text"
+                placeholder="Search for a cryptocurrency..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setIsDropdownOpen(true)}
+                className="search-input"
+            />
+            {isDropdownOpen && (
+                <div className="dropdown">
+                    {(query.trim() ? filteredCoins : coins.slice(0, 10)).map((coin, index) => {
+                        const isExactMatch = query.toLowerCase().trim() === coin.name.toLowerCase().trim() || query.toLowerCase().trim() === coin.symbol.toLowerCase().trim();
+                        console.log(`Coin: ${coin.name}, isExactMatch: ${isExactMatch}, Price: ${coin.price}`);
+                        return (
+                            <div
+                                key={coin.id}
+                                className={`dropdown-item ${isExactMatch ? 'exact-match' : ''}`}
+                            >
                                 <span>
-                                    {coin.name} ({coin.symbol})
+                                    {coin.name} ({coin.symbol ? coin.symbol.toUpperCase() : 'N/A'})
+                                    {coin.price > 0.0 ? ` - $${coin.price.toFixed(2)}` : ''}
                                 </span>
-                                <button
-                                    onClick={() => {
-                                        console.log('Adding coin:', coin);
-                                        onAddCrypto(coin);
-                                    }}
-                                    className="btn btn-sm btn-outline btn-success"
-                                >
-                                    Add
-                                </button>
+                                <button onClick={() => handleAddToWatchlist(coin)}>Add</button>
                             </div>
-                        </li>
-                    ))}
-                </ul>
+                        );
+                    })}
+                    {query.trim() && filteredCoins.length === 0 && (
+                        <div className="dropdown-item">No results found</div>
+                    )}
+                </div>
             )}
         </div>
     );
-}
+};
 
 export default SearchBar;

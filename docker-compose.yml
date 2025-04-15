@@ -7,7 +7,5 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8002:8002"
-    volumes:
-      - ./backend:/app/backend
-      - ./pyproject.toml:/app/pyproject.toml
-      - ./uv.lock:/app/uv.lock
+    env_file:
+      - .env # Add this

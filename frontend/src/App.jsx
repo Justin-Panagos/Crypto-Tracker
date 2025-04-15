@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import SearchBar from './components/SearchBar.jsx';
 import CryptoList from './components/CryptoList.jsx';
 import CandlestickChart from './components/CandlestickChart.jsx';
-
-import "./index.css";
+import './index.css';
 
 function App() {
   const [selectedCryptos, setSelectedCryptos] = useState([]);
@@ -22,13 +21,6 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const addCrypto = (crypto) => {
-    if (!selectedCryptos.find((c) => c.id === crypto.id)) {
-      console.log('Adding crypto:', crypto);
-      setSelectedCryptos([...selectedCryptos, crypto]);
-    }
-  };
-
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
@@ -44,7 +36,7 @@ function App() {
         </div>
         <div className="mb-4">
           <h3 className="text-lg font-semibold mb-2">Search Cryptocurrencies</h3>
-          <SearchBar onAddCrypto={addCrypto} />
+          <SearchBar setSelectedCryptos={setSelectedCryptos} />
         </div>
         <div className="flex gap-4">
           <div className="w-1/3">
