@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { PlusCircleIcon } from '@heroicons/react/24/outline';
 
 const SearchBar = ({ setSelectedCryptos }) => {
     const [query, setQuery] = useState('');
@@ -58,12 +59,16 @@ const SearchBar = ({ setSelectedCryptos }) => {
             name: coin.name || 'Unknown',
             symbol: coin.symbol || 'N/A'
         };
+        console.log('Adding to watchlist:', payload);
         axios.post('http://localhost:8002/api/watchlist', payload)
             .then(response => {
+                console.log('Added to watchlist:', response.data);
                 setSelectedCryptos(response.data);
                 setIsDropdownOpen(false);
             })
-            .catch(error => { });
+            .catch(error => {
+                console.error('Error adding to watchlist:', error.response?.data || error.message);
+            });
     };
 
     return (
@@ -77,20 +82,21 @@ const SearchBar = ({ setSelectedCryptos }) => {
                 className="search-input"
             />
             {isDropdownOpen && (
-                <div className="dropdown">
+                <div className="dropdown bg-base-100">
                     {(query.trim() ? filteredCoins : coins.slice(0, 10)).map((coin, index) => {
                         const isExactMatch = query.toLowerCase().trim().split(/\s+/).some(word =>
                             word === coin.name.toLowerCase().trim() || word === coin.symbol.toLowerCase().trim()
                         );
+                        console.log(`Coin: ${coin.name}, isExactMatch: ${isExactMatch}`);
                         return (
                             <div
                                 key={coin.id}
-                                className={`dropdown-item ${isExactMatch ? 'exact-match' : ''}`}
+                                className={`dropdown-item ${isExactMatch ? 'exact-match' : ''} hover:bg-base-300`}
                             >
                                 <span>
                                     {coin.name} ({coin.symbol ? coin.symbol.toUpperCase() : 'N/A'})
                                 </span>
-                                <button onClick={() => handleAddToWatchlist(coin)}>Add</button>
+                                <button onClick={() => handleAddToWatchlist(coin)}><PlusCircleIcon className="h-5 w-5 hover:text-green-500" /></button>
                             </div>
                         );
                     })}

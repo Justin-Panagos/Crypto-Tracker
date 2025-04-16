@@ -12,6 +12,7 @@ class Coin(BaseModel):
     id: str
     name: str
     symbol: str
+    price: float | None = None
 
     @classmethod
     def __get_validators__(cls):
@@ -25,7 +26,8 @@ class Coin(BaseModel):
             return cls(
                 id=str(value.get("id", "unknown")),
                 name=value.get("name", "Unknown"),
-                symbol=value.get("symbol", "N/A")
+                symbol=value.get("symbol", "N/A"),
+                price=value.get("price", None)
             )
         return cls(**value)
 
@@ -49,15 +51,35 @@ def save_watchlist(watchlist):
     """
     with open("watchlist.json", "w") as f:
         json.dump(watchlist, f)
+        
 
-@app.get("/test")
-async def test():
-    """Test endpoint to verify backend is running.
+def fetch_coin_prices(coin_ids: list[str]):
+    """Fetch prices for multiple coins from Token Metrics.
+
+    Args:
+        coin_ids (list[str]): List of coin IDs.
 
     Returns:
-        dict: Message indicating backend status.
+        dict: Mapping of coin_id to price in USD, None if not found.
     """
-    return {"message": "Backend is alive"}
+    if not coin_ids:
+        return {}
+    prices = {coin_id: None for coin_id in coin_ids}
+    headers = {"accept": "application/json", "api_key": api_key}
+    
+    # Try /v2/price first
+    encoded_ids = '%2C'.join(coin_ids)
+    url = f"https://api.tokenmetrics.com/v2/price?token_id={encoded_ids}"
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json().get("data", [])
+        return {
+            str(item.get("TOKEN_ID")): float(item.get("CURRENT_PRICE", 0)) or None
+            for item in data
+        }
+    except Exception:
+        return {coin_id: None for coin_id in coin_ids}
 
 @app.get("/api/coins")
 async def get_all_coins():
@@ -96,7 +118,7 @@ async def search_coins(query: str):
         query (str): Search term for coin name or symbol.
 
     Returns:
-        dict: Up to 10 matching coins (exact and partial), or error message.
+        dict: Up to 20 matching coins (exact and partial) with id, name, symbol, price, or error message.
     """
     url = "https://api.tokenmetrics.com/v2/tokens?limit=1000"
     headers = {
@@ -147,23 +169,36 @@ async def search_coins(query: str):
                         break
         
         filtered = exact_matches + partial_matches
-        return {"data": filtered[:10]}
+        # Fetch prices for filtered coins
+        # if filtered:
+        #     coin_ids = [coin["id"] for coin in filtered]
+        #     prices = fetch_coin_prices(coin_ids)
+        #     for coin in filtered:
+        #         coin["price"] = prices.get(coin["id"], None)
+        
+        return {"data": filtered[:20]}
     except Exception as e:
         return {"error": "Search failed", "status": response.status_code if 'response' in locals() else 500}
-
+    
+    
 @app.get("/api/watchlist")
 async def get_watchlist():
-    """Retrieve the current watchlist.
+    """Retrieve the current watchlist with prices.
 
     Returns:
-        list: List of coins in the watchlist.
+        list: List of coins with id, name, symbol, price.
     """
     watchlist = load_watchlist()
+    if watchlist:
+        prices = fetch_coin_prices([coin["id"] for coin in watchlist])
+        for coin in watchlist:
+            coin["price"] = prices.get(coin["id"], None)
+        save_watchlist(watchlist)
     return watchlist
 
 @app.post("/api/watchlist")
 async def add_to_watchlist(request: Request, coin: Coin):
-    """Add a coin to the watchlist.
+    """Add a coin to the watchlist with price.
 
     Args:
         request (Request): FastAPI request object.
@@ -174,10 +209,32 @@ async def add_to_watchlist(request: Request, coin: Coin):
     """
     watchlist = load_watchlist()
     if not any(c["id"] == coin.id for c in watchlist):
-        watchlist.append(coin.dict())
+        new_coin = coin.dict()
+        prices = fetch_coin_prices([coin.id])
+        new_coin["price"] = prices.get(coin.id, None)
+        watchlist.append(new_coin)
         save_watchlist(watchlist)
         return watchlist
     return watchlist
+
+@app.put("/api/watchlist")
+async def update_watchlist(watchlist: list[Coin]):
+    """Update the entire watchlist order with prices.
+
+    Args:
+        watchlist (list[Coin]): New ordered list of coins.
+
+    Returns:
+        list: Updated watchlist.
+    """
+    coin_ids = [coin.id for coin in watchlist]
+    prices = fetch_coin_prices(coin_ids)
+    updated_watchlist = [
+        {**coin.dict(), "price": prices.get(coin.id, None)} for coin in watchlist
+    ]
+    save_watchlist(updated_watchlist)
+    return updated_watchlist
+
 
 @app.delete("/api/watchlist/{coin_id}")
 async def delete_from_watchlist(coin_id: str):

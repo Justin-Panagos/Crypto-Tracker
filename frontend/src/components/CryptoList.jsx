@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import axios from 'axios';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { TrashIcon, Bars3Icon } from '@heroicons/react/24/outline';
 
 function CryptoList({
     selectedCryptos,
@@ -8,28 +10,31 @@ function CryptoList({
     setSelectedCrypto,
 }) {
     useEffect(() => {
-        axios.get('http://localhost:8002/api/watchlist')
-            .then(response => {
+        axios
+            .get('http://localhost:8002/api/watchlist')
+            .then((response) => {
                 console.log('Watchlist response:', response.data);
                 setSelectedCryptos(response.data || []);
             })
-            .catch(error => {
+            .catch((error) => {
                 console.error('Error fetching watchlist:', error);
                 setSelectedCryptos([]);
             });
     }, [setSelectedCryptos]);
 
-    const handleDelete = (crypto) => {
+    const handleDelete = (crypto, e) => {
+        e.stopPropagation();
         console.log('Deleting crypto:', crypto);
-        axios.delete(`http://localhost:8002/api/watchlist/${crypto.id}`)
-            .then(response => {
+        axios
+            .delete(`http://localhost:8002/api/watchlist/${crypto.id}`)
+            .then((response) => {
                 console.log('Watchlist after delete:', response.data);
                 setSelectedCryptos(response.data);
                 if (selectedCrypto.id === crypto.id) {
                     setSelectedCrypto(response.data[0] || { id: '', name: '' });
                 }
             })
-            .catch(error => {
+            .catch((error) => {
                 console.error('Error deleting crypto:', error);
             });
     };
@@ -39,34 +44,83 @@ function CryptoList({
         setSelectedCrypto(crypto);
     };
 
+    const handleDragEnd = (result) => {
+        if (!result.destination) return;
+        try {
+            const reorderedCryptos = Array.from(selectedCryptos);
+            const [movedCrypto] = reorderedCryptos.splice(result.source.index, 1);
+            reorderedCryptos.splice(result.destination.index, 0, movedCrypto);
+            setSelectedCryptos(reorderedCryptos);
+            axios
+                .put('http://localhost:8002/api/watchlist', reorderedCryptos)
+                .then((response) => {
+                    console.log('Watchlist reordered:', response.data);
+                })
+                .catch((error) => {
+                    console.error('Error reordering watchlist:', error);
+                });
+        } catch (error) {
+            console.error('Error dragging:', error);
+        }
+    };
+
+    const formatPrice = (price) => {
+        if (price === null || price === undefined) return 'N/A';
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 4,
+        }).format(price);
+    };
+
     return (
-        <div>
+        <div className="watchlist">
             {selectedCryptos.length > 0 ? (
-                <ul className="menu bg-base-200 rounded-box h-[calc(100vh-18rem)] overflow-y-auto">
-                    {selectedCryptos.map((crypto) => (
-                        <li key={crypto.id}>
-                            <div
-                                className={`flex justify-between items-center cursor-pointer ${selectedCrypto.id === crypto.id ? 'bg-base-300' : ''}`}
-                                onClick={() => handleSelect(crypto)}
+                <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId="watchlist">
+                        {(provided) => (
+                            <ul
+                                className="menu bg-base-200 rounded-box h-[calc(100vh-18rem)] overflow-y-auto w-100"
+                                {...provided.droppableProps}
+                                ref={provided.innerRef}
                             >
-                                <span>
-                                    {crypto.name} ({crypto.symbol.toUpperCase()})
-                                </span>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(crypto);
-                                    }}
-                                    className="btn btn-sm btn-error"
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
+                                {selectedCryptos.map((crypto, index) => (
+                                    <Draggable key={crypto.id} draggableId={crypto.id} index={index}>
+                                        {(provided) => (
+                                            <li
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                className={`flex justify-between  ${selectedCrypto.id === crypto.id ? 'bg-primary-300' : ''
+                                                    }`}
+                                                onClick={() => handleSelect(crypto)}
+                                            >
+                                                <div className="flex flex-p-2">
+                                                    <div className='flex-none'>
+                                                        <TrashIcon
+                                                            className="h-4 w-4 text-gray-400 hover:text-warning cursor-pointer"
+                                                            onClick={(e) => handleDelete(crypto, e)}
+                                                        />
+                                                    </div>
+                                                    <div className="font-semibold">{crypto.symbol.toUpperCase()}</div>
+                                                    <div className="flex-auto text-right text-gray-500 mx-2">{formatPrice(crypto.price)}</div>
+
+                                                    <div className='flex-none' {...provided.dragHandleProps}>
+                                                        <Bars3Icon className="h-5 w-5 text-gray-500 cursor-move" />
+                                                    </div>
+
+                                                </div>
+                                            </li>
+                                        )}
+                                    </Draggable>
+                                ))}
+                                {provided.placeholder}
+                            </ul>
+                        )}
+                    </Droppable>
+                </DragDropContext>
             ) : (
-                <p className="text-gray-500">Select Currencies</p>
+                <p className="text-gray-500">Add a cryptocurrency to your watchlist.</p>
             )}
         </div>
     );

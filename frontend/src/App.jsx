@@ -39,7 +39,7 @@ function App() {
           <SearchBar setSelectedCryptos={setSelectedCryptos} />
         </div>
         <div className="flex gap-4">
-          <div className="w-1/3">
+          <div className="w-[300px]">
             <h3 className="text-lg font-semibold mb-2">Watchlist</h3>
             <CryptoList
               selectedCryptos={selectedCryptos}
@@ -48,7 +48,7 @@ function App() {
               setSelectedCrypto={setSelectedCrypto}
             />
           </div>
-          <div className="w-2/3">
+          <div className="flex-1">
             <h3 className="text-lg font-semibold mb-2">
               {selectedCrypto.name
                 ? `${selectedCrypto.name} Chart`

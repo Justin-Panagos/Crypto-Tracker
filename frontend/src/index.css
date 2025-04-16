@@ -4,7 +4,7 @@
 
 .search-bar-container {
     position: relative;
-    width: 300px;
+    width: 450px;
     margin: 20px auto;
 }
 
@@ -21,11 +21,11 @@
     top: 100%;
     left: 0;
     right: 0;
-    max-height: 200px;
+    width: 450px;
+    max-height: 300px;
     overflow-y: auto;
-    background: white;
     border: 1px solid #ccc;
-    border-radius: 4px;
+    border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     z-index: 1000;
 }
@@ -38,20 +38,15 @@
     cursor: pointer;
 }
 
-.dropdown-item:hover {
-    background: #f0f0f0;
+
+.watchlist {
+    width: 300px;
 }
 
-.dropdown-item button {
-    padding: 4px 8px;
-    font-size: 12px;
-    background: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+.watchlist ul {
+    width: 300px;
 }
 
-.dropdown-item button:hover {
-    background: #0056b3;
+.watchlist ul li {
+    width: 100%;
 }
