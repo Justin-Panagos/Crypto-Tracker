@@ -47,6 +47,8 @@ const SearchBar = ({ setSelectedCryptos }) => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setIsDropdownOpen(false);
+                setQuery('');
+                setFilteredCoins([]);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -63,6 +65,8 @@ const SearchBar = ({ setSelectedCryptos }) => {
             .then(response => {
                 setSelectedCryptos(response.data);
                 setIsDropdownOpen(false);
+                setQuery("")
+                setFilteredCoins([]);
             })
             .catch(error => {
                 console.error('Error adding to watchlist:', error.response?.data || error.message);
@@ -85,7 +89,6 @@ const SearchBar = ({ setSelectedCryptos }) => {
                         const isExactMatch = query.toLowerCase().trim().split(/\s+/).some(word =>
                             word === coin.name.toLowerCase().trim() || word === coin.symbol.toLowerCase().trim()
                         );
-                        console.log(`Coin: ${coin.name}, isExactMatch: ${isExactMatch}`);
                         return (
                             <div
                                 key={coin.id}
