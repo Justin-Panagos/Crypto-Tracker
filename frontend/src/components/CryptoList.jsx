@@ -13,22 +13,18 @@ function CryptoList({
         axios
             .get('http://localhost:8002/api/watchlist')
             .then((response) => {
-                console.log('Watchlist response:', response.data);
                 setSelectedCryptos(response.data || []);
             })
             .catch((error) => {
-                console.error('Error fetching watchlist:', error);
                 setSelectedCryptos([]);
             });
     }, [setSelectedCryptos]);
 
     const handleDelete = (crypto, e) => {
         e.stopPropagation();
-        console.log('Deleting crypto:', crypto);
         axios
             .delete(`http://localhost:8002/api/watchlist/${crypto.id}`)
             .then((response) => {
-                console.log('Watchlist after delete:', response.data);
                 setSelectedCryptos(response.data);
                 if (selectedCrypto.id === crypto.id) {
                     setSelectedCrypto(response.data[0] || { id: '', name: '' });
@@ -40,7 +36,6 @@ function CryptoList({
     };
 
     const handleSelect = (crypto) => {
-        console.log('Selecting crypto:', crypto);
         setSelectedCrypto(crypto);
     };
 

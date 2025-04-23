@@ -59,10 +59,8 @@ const SearchBar = ({ setSelectedCryptos }) => {
             name: coin.name || 'Unknown',
             symbol: coin.symbol || 'N/A'
         };
-        console.log('Adding to watchlist:', payload);
         axios.post('http://localhost:8002/api/watchlist', payload)
             .then(response => {
-                console.log('Added to watchlist:', response.data);
                 setSelectedCryptos(response.data);
                 setIsDropdownOpen(false);
             })

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from datetime import datetime, timedelta
 import json
 import os
 import requests
@@ -67,7 +68,6 @@ def fetch_coin_prices(coin_ids: list[str]):
     prices = {coin_id: None for coin_id in coin_ids}
     headers = {"accept": "application/json", "api_key": api_key}
     
-    # Try /v2/price first
     encoded_ids = '%2C'.join(coin_ids)
     url = f"https://api.tokenmetrics.com/v2/price?token_id={encoded_ids}"
     try:
@@ -80,6 +80,126 @@ def fetch_coin_prices(coin_ids: list[str]):
         }
     except Exception:
         return {coin_id: None for coin_id in coin_ids}
+
+def get_token_details(coin_id: str):
+    """Fetch symbol and token_name for a coin from Token Metrics.
+
+    Args:
+        coin_id (str): ID of the coin.
+
+    Returns:
+        tuple: (symbol, token_name) or (None, None) if not found.
+    """
+    headers = {"accept": "application/json", "api_key": api_key}
+    url = "https://api.tokenmetrics.com/v2/tokens?limit=1000"
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        tokens = response.json().get("data", [])
+        for token in tokens:
+            if str(token.get("TOKEN_ID")) == coin_id:
+                symbol = token.get("TOKEN_SYMBOL")
+                name = token.get("TOKEN_NAME")
+                print(f"Found token details for {coin_id}: symbol={symbol}, token_name={name}")
+                return symbol, name
+        return None, None
+    except Exception as e:
+        return None, None
+
+@app.get("/api/price_history/{coin_id}")
+async def get_price_history(coin_id: str):
+    """Fetch 30-day OHLC price history for a coin from Token Metrics.
+
+    Args:
+        coin_id (str): ID of the coin (e.g., '295' for PERA).
+
+    Returns:
+        dict: List of {date, open, high, low, close} for 30 days, or single current price, or empty.
+    """
+    headers = {"accept": "application/json", "api_key": api_key}
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    symbol, token_name = get_token_details(coin_id)
+    if not symbol or not token_name:
+        return {"data": []}
+    
+    url = f"https://api.tokenmetrics.com/v2/daily-ohlcv?token_id={coin_id}&symbol={symbol}&token_name={token_name}&startDate={start_date}&endDate={end_date}&limit=30"
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        raw_data = response.json()
+        data = raw_data.get("data", [])
+        if not data or not isinstance(data, list):
+            print(f"No daily-ohlcv data for {coin_id}")
+        else:
+            history = [
+                {
+                    "date": item.get("DATE"),
+                    "open": float(item.get("OPEN", 0)) or None,
+                    "high": float(item.get("HIGH", 0)) or None,
+                    "low": float(item.get("LOW", 0)) or None,
+                    "close": float(item.get("CLOSE", 0)) or None
+                }
+                for item in data
+            ]
+            return {"data": history}
+    except requests.exceptions.HTTPError as e:
+        error_response = response.json() if response.content else {}
+    
+    """ Fallback to current price """
+    url = f"https://api.tokenmetrics.com/v2/price?token_id={coin_id}"
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json().get("data", [])
+        if data and isinstance(data, list) and len(data) > 0:
+            current_price = float(data[0].get("CURRENT_PRICE", 0)) or None
+            if current_price:
+                history = [{
+                    "date": end_date,
+                    "open": current_price,
+                    "high": current_price,
+                    "low": current_price,
+                    "close": current_price
+                }]
+                return {"data": history}
+        return {"data": []}
+    except Exception as e:
+        return {"data": []}
+
+@app.get("/api/market")
+async def get_market_metrics():
+    """Fetch 30-day market metrics from Token Metrics.
+
+    Returns:
+        dict: List of {date, market_cap, high_grade_percentage, signal} for 30 days.
+    """
+    headers = {"accept": "application/json", "api_key": api_key}
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    url = f"https://api.tokenmetrics.com/v2/market-metrics?startDate={start_date}&endDate={end_date}&limit=1000&page=0"
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        raw_data = response.json()
+        data = raw_data.get("data", [])
+        if not data or not isinstance(data, list):
+            return {"data": []}
+        history = [
+            {
+                "date": item.get("DATE"),
+                "market_cap": float(item.get("TOTAL_CRYPTO_MCAP", 0)) or None,
+                "high_grade_percentage": float(item.get("TM_GRADE_PERC_HIGH_COINS", 0)) or None,
+                "signal": item.get("TM_GRADE_SIGNAL", 0) or 0
+            }
+            for item in data
+        ]
+        return {"data": history}
+    except requests.exceptions.HTTPError as e:
+        error_response = response.json() if response.content else {}
+    
 
 @app.get("/api/coins")
 async def get_all_coins():
@@ -169,12 +289,6 @@ async def search_coins(query: str):
                         break
         
         filtered = exact_matches + partial_matches
-        # Fetch prices for filtered coins
-        # if filtered:
-        #     coin_ids = [coin["id"] for coin in filtered]
-        #     prices = fetch_coin_prices(coin_ids)
-        #     for coin in filtered:
-        #         coin["price"] = prices.get(coin["id"], None)
         
         return {"data": filtered[:20]}
     except Exception as e:

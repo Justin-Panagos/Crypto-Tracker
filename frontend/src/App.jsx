@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import SearchBar from './components/SearchBar.jsx';
 import CryptoList from './components/CryptoList.jsx';
-import CandlestickChart from './components/CandlestickChart.jsx';
+import CryptoCharts from './components/CryptoCharts.jsx';
 import './index.css';
 
 function App() {
@@ -54,7 +54,7 @@ function App() {
                 ? `${selectedCrypto.name} Chart`
                 : 'Select a Crypto to View Chart'}
             </h3>
-            <CandlestickChart crypto={selectedCrypto} />
+            <CryptoCharts crypto={selectedCrypto} />
           </div>
         </div>
       </div>
