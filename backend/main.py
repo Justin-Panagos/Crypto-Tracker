@@ -80,16 +80,10 @@ def fetch_coin_prices(coin_ids: list[str]):
         }
     except Exception:
         return {coin_id: None for coin_id in coin_ids}
-
+    
+    
 def get_token_details(coin_id: str):
-    """Fetch symbol and token_name for a coin from Token Metrics.
-
-    Args:
-        coin_id (str): ID of the coin.
-
-    Returns:
-        tuple: (symbol, token_name) or (None, None) if not found.
-    """
+    """Fetch symbol and token_name for a coin from Token Metrics."""
     headers = {"accept": "application/json", "api_key": api_key}
     url = "https://api.tokenmetrics.com/v2/tokens?limit=1000"
     try:
@@ -98,41 +92,56 @@ def get_token_details(coin_id: str):
         tokens = response.json().get("data", [])
         for token in tokens:
             if str(token.get("TOKEN_ID")) == coin_id:
-                symbol = token.get("TOKEN_SYMBOL")
-                name = token.get("TOKEN_NAME")
-                print(f"Found token details for {coin_id}: symbol={symbol}, token_name={name}")
-                return symbol, name
+                return token.get("TOKEN_SYMBOL"), token.get("TOKEN_NAME")
         return None, None
-    except Exception as e:
+    except Exception:
         return None, None
+
 
 @app.get("/api/price_history/{coin_id}")
-async def get_price_history(coin_id: str):
-    """Fetch 30-day OHLC price history for a coin from Token Metrics.
-
-    Args:
-        coin_id (str): ID of the coin (e.g., '295' for PERA).
-
-    Returns:
-        dict: List of {date, open, high, low, close} for 30 days, or single current price, or empty.
-    """
+async def get_price_history(coin_id: str, range: str = "1M"):
+    """Fetch price history for a coin based on the selected time range."""
     headers = {"accept": "application/json", "api_key": api_key}
-    end_date = datetime.now().strftime("%Y-%m-%d")
-    start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     
+    range_map = {
+        "1Y": 365,
+        "3M": 90,
+        "1M": 30,
+        "7d": 7,
+        "1d": 1,
+        "1h": 0 
+    }
+    
+    if range not in range_map:
+        raise HTTPException(status_code=400, detail="Invalid range. Use: 1Y, 3M, 1M, 7d, 1d, 1h")
+    
+    # Fetch symbol and token_name
     symbol, token_name = get_token_details(coin_id)
     if not symbol or not token_name:
         return {"data": []}
     
-    url = f"https://api.tokenmetrics.com/v2/daily-ohlcv?token_id={coin_id}&symbol={symbol}&token_name={token_name}&startDate={start_date}&endDate={end_date}&limit=30"
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        raw_data = response.json()
-        data = raw_data.get("data", [])
-        if not data or not isinstance(data, list):
-            print(f"No daily-ohlcv data for {coin_id}")
-        else:
+    # Set date range (except for 1h)
+    if range != "1h":
+        days = range_map[range]
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        end_date_str = end_date.strftime("%Y-%m-%d")
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        
+        # Fetch daily OHLCV
+        url = f"https://api.tokenmetrics.com/v2/daily-ohlcv?token_id={coin_id}&symbol={symbol}&token_name={token_name}&startDate={start_date_str}&endDate={end_date_str}&limit=1000"
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            if not data or not isinstance(data, list):
+                # Extend start_date further back to fetch available data
+                start_date = end_date - timedelta(days=days + 30)  # Try 30 days earlier
+                start_date_str = start_date.strftime("%Y-%m-%d")
+                url = f"https://api.tokenmetrics.com/v2/daily-ohlcv?token_id={coin_id}&symbol={symbol}&token_name={token_name}&startDate={start_date_str}&endDate={end_date_str}&limit=1000"
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json().get("data", [])
             history = [
                 {
                     "date": item.get("DATE"),
@@ -141,13 +150,46 @@ async def get_price_history(coin_id: str):
                     "low": float(item.get("LOW", 0)) or None,
                     "close": float(item.get("CLOSE", 0)) or None
                 }
-                for item in data
+                for item in data if float(item.get("OPEN", 0)) > 0
             ]
             return {"data": history}
-    except requests.exceptions.HTTPError as e:
-        error_response = response.json() if response.content else {}
+        except requests.exceptions.HTTPError:
+            pass
+    else:
+        # For 1h, fetch hourly OHLCV for the last 7 days
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=7)  # Last 7 days for hourly data
+        end_date_str = end_date.strftime("%Y-%m-%d")
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        
+        url = f"https://api.tokenmetrics.com/v2/hourly-ohlcv?token_id={coin_id}&symbol={symbol}&token_name={token_name}&startDate={start_date_str}&endDate={end_date_str}&limit=1000"
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            if not data or not isinstance(data, list):
+                # Extend start_date further back
+                start_date = end_date - timedelta(days=14)  # Try 14 days earlier
+                start_date_str = start_date.strftime("%Y-%m-%d")
+                url = f"https://api.tokenmetrics.com/v2/hourly-ohlcv?token_id={coin_id}&symbol={symbol}&token_name={token_name}&startDate={start_date_str}&endDate={end_date_str}&limit=1000"
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json().get("data", [])
+            history = [
+                {
+                    "date": item.get("DATE"),
+                    "open": float(item.get("OPEN", 0)) or None,
+                    "high": float(item.get("HIGH", 0)) or None,
+                    "low": float(item.get("LOW", 0)) or None,
+                    "close": float(item.get("CLOSE", 0)) or None
+                }
+                for item in data if float(item.get("OPEN", 0)) > 0
+            ]
+            return {"data": history}
+        except requests.exceptions.HTTPError:
+            pass
     
-    """ Fallback to current price """
+    # Fallback to current price if no OHLC data
     url = f"https://api.tokenmetrics.com/v2/price?token_id={coin_id}"
     try:
         response = requests.get(url, headers=headers)
@@ -157,7 +199,7 @@ async def get_price_history(coin_id: str):
             current_price = float(data[0].get("CURRENT_PRICE", 0)) or None
             if current_price:
                 history = [{
-                    "date": end_date,
+                    "date": datetime.now().strftime("%Y-%m-%d"),
                     "open": current_price,
                     "high": current_price,
                     "low": current_price,
@@ -165,7 +207,7 @@ async def get_price_history(coin_id: str):
                 }]
                 return {"data": history}
         return {"data": []}
-    except Exception as e:
+    except Exception:
         return {"data": []}
 
 @app.get("/api/market")
@@ -290,7 +332,7 @@ async def search_coins(query: str):
         
         filtered = exact_matches + partial_matches
         
-        return {"data": filtered[:20]}
+        return {"data": filtered[:30]}
     except Exception as e:
         return {"error": "Search failed", "status": response.status_code if 'response' in locals() else 500}
     
